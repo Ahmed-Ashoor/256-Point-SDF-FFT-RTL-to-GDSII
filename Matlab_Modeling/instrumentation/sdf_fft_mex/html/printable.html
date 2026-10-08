@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta http-equiv="Content-Type" content="text/html; charset=utf-8" /></head>
+<h1>Instrumentation Results for sdf_fft_mex</h1>
+<h2>Summary</h2>
+<p>To re-create this report:</p>
+<pre>  showInstrumentationResults sdf_fft_mex -proposeFL -defaultDT numerictype(1,32)</pre>
+
+<p>MEX-function name:</p>
+<pre>sdf_fft_mex</pre>
+<p>Timestamp:</p>
+<pre>Fri Aug 14 21:02:56 2026</pre>
+<p>To open this report from the MATLAB command line:</p>
+<pre> web('-browser','D:\desktop_files\Training shii\ADI_Intern\Final_Project\Matlab_Modeling\instrumentation\sdf_fft_mex\html\printable.html')</pre>
+
+
+<h2>Function sdf_fft </h2>
+
+<pre>
+function y = sdf_fft(x, T) %#codegen
+
+N  = 256;
+x  = cast(x, 'like', T.x);
+
+% twiddle ROM in hardware
+idxVec         = (0:127).';
+twTable_double = exp(-1i * 2 * pi * idxVec / N);   % double
+twTable        = cast(twTable_double, 'like', T.WN);   % casting
+
+
+%stage 1: period=256, half=128, exponent step = 2^0 = 1
+stg_1 = cast(complex(zeros(256,1)), 'like', T.stg1);
+for i = 1:256
+    if i <= 128
+        stg_1(i) = cast(x(i) + x(i + 128), 'like', T.stg1);
+    else
+        n  = i - 129;
+        Wp = twTable(n + 1);           % WN^(1*n)
+        stg_1(i) = cast((x(i - 128) - x(i)) * Wp, 'like', T.stg1);
+    end
+end
+
+%stage 2: period=128, half=64, exponent step = 2^1 = 2
+stg_2 = cast(complex(zeros(256,1)), 'like', T.stg2);
+for i = 1:256
+    p = mod(i-1, 128);
+    if p < 64
+        stg_2(i) = cast(stg_1(i) + stg_1(i + 64), 'like', T.stg2);
+    else
+        n  = p - 64;
+        Wp = twTable(2*n + 1);         % WN^(2*n)
+        stg_2(i) = cast((stg_1(i - 64) - stg_1(i)) * Wp, 'like', T.stg2);
+    end
+end
+
+%stage 3: period=64, half=32, exponent step = 2^2 = 4
+stg_3 = cast(complex(zeros(256,1)), 'like', T.stg3);
+for i = 1:256
+    p = mod(i-1, 64);
+    if p < 32
+        stg_3(i) = cast(stg_2(i) + stg_2(i + 32), 'like', T.stg3);
+    else
+        n  = p - 32;
+        Wp = twTable(4*n + 1);         % WN^(4*n)
+        stg_3(i) = cast((stg_2(i - 32) - stg_2(i)) * Wp, 'like', T.stg3);
+    end
+end
+
+%stage 4: period=32, half=16, exponent step = 2^3 = 8
+stg_4 = cast(complex(zeros(256,1)), 'like', T.stg4);
+for i = 1:256
+    p = mod(i-1, 32);
+    if p < 16
+        stg_4(i) = cast(stg_3(i) + stg_3(i + 16), 'like', T.stg4);
+    else
+        n  = p - 16;
+        Wp = twTable(8*n + 1);         % WN^(8*n)
+        stg_4(i) = cast((stg_3(i - 16) - stg_3(i)) * Wp, 'like', T.stg4);
+    end
+end
+
+%stage 5: period=16, half=8, exponent step = 2^4 = 16
+stg_5 = cast(complex(zeros(256,1)), 'like', T.stg5);
+for i = 1:256
+    p = mod(i-1, 16);
+    if p < 8
+        stg_5(i) = cast(stg_4(i) + stg_4(i + 8), 'like', T.stg5);
+    else
+        n  = p - 8;
+        Wp = twTable(16*n + 1);        % WN^(16*n)
+        stg_5(i) = cast((stg_4(i - 8) - stg_4(i)) * Wp, 'like', T.stg5);
+    end
+end
+
+%stage 6: period=8, half=4, exponent step = 2^5 = 32
+stg_6 = cast(complex(zeros(256,1)), 'like', T.stg6);
+for i = 1:256
+    p = mod(i-1, 8);
+    if p < 4
+        stg_6(i) = cast(stg_5(i) + stg_5(i + 4), 'like', T.stg6);
+    else
+        n  = p - 4;
+        Wp = twTable(32*n + 1);        % WN^(32*n)
+        stg_6(i) = cast((stg_5(i - 4) - stg_5(i)) * Wp, 'like', T.stg6);
+    end
+end
+
+%stage 7: period=4, half=2, exponent step = 2^6 = 64
+stg_7 = cast(complex(zeros(256,1)), 'like', T.stg7);
+for i = 1:256
+    p = mod(i-1, 4);
+    if p < 2
+        stg_7(i) = cast(stg_6(i) + stg_6(i + 2), 'like', T.stg7);
+    else
+        n  = p - 2;
+        Wp = twTable(64*n + 1);        % WN^(64*n)
+        stg_7(i) = cast((stg_6(i - 2) - stg_6(i)) * Wp, 'like', T.stg7);
+    end
+end
+
+%stage 8: period=2, half=1 (twiddle always 1 -- no multiply/cast needed)
+stg_8 = cast(complex(zeros(256,1)), 'like', T.stg8);
+for i = 1:256
+    p = mod(i-1, 2);
+    if p < 1
+        stg_8(i) = cast(stg_7(i) + stg_7(i + 1), 'like', T.stg8);
+    else
+        stg_8(i) = cast(stg_7(i - 1) - stg_7(i), 'like', T.stg8);
+    end
+end
+
+y = cast(stg_8, 'like', T.y);
+
+end
+</pre>
+<table style="border-collapse: collapse; border: solid;" border="1">
+<caption><b>Logged Variables for sdf_fft</b></caption>
+<tr><th>Variable</th><th>Type</th><th>Size</th><th>Class</th><th>Complex</th><th>Proposed<br>Signedness</th><th>Proposed<br>WL</th><th>Proposed<br>FL</th><th>Always<br>Whole Number</th><th>SimMin</th><th>SimMax</th></tr>
+<tr><td><code>N</code></td><td><code>Local</code></td><td><code>1&nbsp;x&nbsp;1</code></td><td><code>double</code></td><td><code>No</code></td><td><code>Signed</code></td><td><code>32</code></td><td><code>0</code></td><td><code><b>Yes</b></code></td><td><code>256</code></td><td><code>256</code></td></tr>
+<tr><td><code>Wp</code></td><td><code>Local</code></td><td><code>1&nbsp;x&nbsp;1</code></td><td><code>double</code></td><td><code>Yes</code></td><td><code>Signed</code></td><td><code>32</code></td><td><code>30</code></td><td><code>No</code></td><td><code>-1</code></td><td><code>1</code></td></tr>
+<tr><td><code>i</code></td><td><code>Local</code></td><td><code>1&nbsp;x&nbsp;1</code></td><td><code>double</code></td><td><code>No</code></td><td><code>Signed</code></td><td><code>32</code></td><td><code>0</code></td><td><code><b>Yes</b></code></td><td><code>1</code></td><td><code>256</code></td></tr>
+<tr><td><code>idxVec</code></td><td><code>Local</code></td><td><code>128&nbsp;x&nbsp;1</code></td><td><code>double</code></td><td><code>No</code></td><td><code>Signed</code></td><td><code>32</code></td><td><code>0</code></td><td><code><b>Yes</b></code></td><td><code>0</code></td><td><code>127</code></td></tr>
+<tr><td><code>n</code></td><td><code>Local</code></td><td><code>1&nbsp;x&nbsp;1</code></td><td><code>double</code></td><td><code>No</code></td><td><code>Signed</code></td><td><code>32</code></td><td><code>0</code></td><td><code><b>Yes</b></code></td><td><code>0</code></td><td><code>127</code></td></tr>
+<tr><td><code>p</code></td><td><code>Local</code></td><td><code>1&nbsp;x&nbsp;1</code></td><td><code>double</code></td><td><code>No</code></td><td><code>Signed</code></td><td><code>32</code></td><td><code>0</code></td><td><code><b>Yes</b></code></td><td><code>0</code></td><td><code>127</code></td></tr>
+<tr><td><code>stg_1</code></td><td><code>Local</code></td><td><code>256&nbsp;x&nbsp;1</code></td><td><code>double</code></td><td><code>Yes</code></td><td><code>Signed</code></td><td><code>32</code></td><td><code>28</code></td><td><code>No</code></td><td><code>-7.030736991485153</code></td><td><code>6.901697867765938</code></td></tr>
+<tr><td><code>stg_2</code></td><td><code>Local</code></td><td><code>256&nbsp;x&nbsp;1</code></td><td><code>double</code></td><td><code>Yes</code></td><td><code>Signed</code></td><td><code>32</code></td><td><code>27</code></td><td><code>No</code></td><td><code>-9.960689036638263</code></td><td><code>9.677228831171009</code></td></tr>
+<tr><td><code>stg_3</code></td><td><code>Local</code></td><td><code>256&nbsp;x&nbsp;1</code></td><td><code>double</code></td><td><code>Yes</code></td><td><code>Signed</code></td><td><code>32</code></td><td><code>27</code></td><td><code>No</code></td><td><code>-14.563822818423022</code></td><td><code>13.89051614118424</code></td></tr>
+<tr><td><code>stg_4</code></td><td><code>Local</code></td><td><code>256&nbsp;x&nbsp;1</code></td><td><code>double</code></td><td><code>Yes</code></td><td><code>Signed</code></td><td><code>32</code></td><td><code>26</code></td><td><code>No</code></td><td><code>-18.986508898797503</code></td><td><code>21.07249311929346</code></td></tr>
+<tr><td><code>stg_5</code></td><td><code>Local</code></td><td><code>256&nbsp;x&nbsp;1</code></td><td><code>double</code></td><td><code>Yes</code></td><td><code>Signed</code></td><td><code>32</code></td><td><code>26</code></td><td><code>No</code></td><td><code>-26.34287539494023</code></td><td><code>27.820042300566953</code></td></tr>
+<tr><td><code>stg_6</code></td><td><code>Local</code></td><td><code>256&nbsp;x&nbsp;1</code></td><td><code>double</code></td><td><code>Yes</code></td><td><code>Signed</code></td><td><code>32</code></td><td><code>25</code></td><td><code>No</code></td><td><code>-39.74079620284324</code></td><td><code>41.73719561696291</code></td></tr>
+<tr><td><code>stg_7</code></td><td><code>Local</code></td><td><code>256&nbsp;x&nbsp;1</code></td><td><code>double</code></td><td><code>Yes</code></td><td><code>Signed</code></td><td><code>32</code></td><td><code>25</code></td><td><code>No</code></td><td><code>-58.45294623535585</code></td><td><code>56.31046385840634</code></td></tr>
+<tr><td><code>stg_8</code></td><td><code>Local</code></td><td><code>256&nbsp;x&nbsp;1</code></td><td><code>double</code></td><td><code>Yes</code></td><td><code>Signed</code></td><td><code>32</code></td><td><code>24</code></td><td><code>No</code></td><td><code>-74.43869936513619</code></td><td><code>76.1177154560931</code></td></tr>
+<tr><td><code>twTable</code></td><td><code>Local</code></td><td><code>128&nbsp;x&nbsp;1</code></td><td><code>double</code></td><td><code>Yes</code></td><td><code>Signed</code></td><td><code>32</code></td><td><code>30</code></td><td><code>No</code></td><td><code>-1</code></td><td><code>1</code></td></tr>
+<tr><td><code>twTable_double</code></td><td><code>Local</code></td><td><code>128&nbsp;x&nbsp;1</code></td><td><code>double</code></td><td><code>Yes</code></td><td><code>Signed</code></td><td><code>32</code></td><td><code>30</code></td><td><code>No</code></td><td><code>-1</code></td><td><code>1</code></td></tr>
+<tr><td><code>x</code></td><td><code>Input</code></td><td><code>256&nbsp;x&nbsp;1</code></td><td><code>double</code></td><td><code>Yes</code></td><td><code>Signed</code></td><td><code>32</code></td><td><code>28</code></td><td><code>No</code></td><td><code>-5.138779575988432</code></td><td><code>4.952259317033658</code></td></tr>
+<tr><td><code>y</code></td><td><code>Output</code></td><td><code>256&nbsp;x&nbsp;1</code></td><td><code>double</code></td><td><code>Yes</code></td><td><code>Signed</code></td><td><code>32</code></td><td><code>24</code></td><td><code>No</code></td><td><code>-74.43869936513619</code></td><td><code>76.1177154560931</code></td></tr>
+</table>
+</html>
